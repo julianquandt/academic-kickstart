@@ -1,2 +1,7 @@
 public/
 .idea/
+.Rproj.user
+*.rdx
+*.RData
+*.rdb
+.Rhistory

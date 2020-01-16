@@ -1,0 +1,215 @@
+---
+title: Power Analysis by Data Simulation - Part IV
+date: "16 January, 2020"
+---
+
+
+
+<!-- this is the fcimpulse logo-->
+<!-- <div id="logo"><img src="../../style/fcimpulse.jpg" width="150px" align="right"></div> -->
+<style type="text/css">
+button.btn.collapsed:before
+{
+    content:'+' ;
+    display:block;
+    width:15px;
+}
+button.btn:before
+{
+    content:'-' ;
+    display:block;
+    width:15px;
+}
+</style>
+<div id="the-power-analysis-by-simulation-in-r-for-really-any-design---part-iv" class="section level1">
+<h1>The Power Analysis by simulation in <code>R</code> for really any design - Part IV</h1>
+<p>This is Part III of my tutorial on how to do power-analysis by simulation.
+In Part I, we saw how to do a simulation for a simple toy-example with a coin-toss.
+In part II we learned how to simulate univariate and multivariate normal-distributions, specify our assmuptions about the expected effect and test our simulated data with different t-tests.
+In part III, we focused on how we can write a flexible test for any model by making use of the fact that many statistical standard methods (e.g. t-test, ANOVA) can be rewritten as a linear model.
+In this part we will learn how to apply this technique to complicated designs such as linear mixed-effects models and generalized mixed-effects models.</p>
+<p>In the following, We will work through a toy-example that starts out as the most simple form of a mixed-effects that we will gradually add predictors to, to see how we can deal with complex modelling situations.</p>
+</div>
+<div id="no-internet" class="section level1">
+<h1>No Internet</h1>
+<p><img src="https://live.staticflickr.com/2858/33798266461_1c98fe7f8c_b.jpg" alt="no-internet" width="500"/></p>
+<p>Imagine we want to estimate peoples’ score on the iconic Google Chrome “No Internet” Game (MAKE FOOTNOTE if you have not heard of it, you can try it yourself <a href="http://www.trex-game.skipser.com/">here</a>).
+To get a first impression on how we might do this, we want to simulate data and afterwards run power-analysis to see how many people we might need.</p>
+<p>Specifically, we want to know how the time of day and the
+We will invite people to come play the game at 5 different times</p>
+<div id="hierarchical-data" class="section level2">
+<h2>Hierarchical Data</h2>
+<p>I assume that the reader who wants to learn how to do power-analysis for hierarchical model is familiar with how hierarchical data is structured, but as we have to come up with an example for simulation anyway we can have a look at how hierarchical data is structured in the following toy example.</p>
+<p>Imagine we are interested in predicting how succesful in terms of revenue a movie is based on its genre.
+We want to answer this question as general as possible across the entire world.</p>
+<p>One might already expect that different genres create more or less revenues and that the budget that a movie has is definitely related to the revenue.
+Moreover, what we need to consider that some countries’ movies are regularly exported across the world (e.g. USA) while other countries’ movies are often not watched across the entire world.
+Thus, even though we are not interested in the effect that a production-country has on revenue, we might want to account for this in our statistical model.
+Moreover, the production studio where a movie is made might influence revenue, as some are richer than others or have more experience or a better reputation and can therefore create larger revenues.</p>
+<p>Of course, this is strongly simplified but let us assume for now that this is all the factors that we want to consider for now.</p>
+<p>How is this data structured?
+It helps to imagine what happens when a movie is created.
+A movie is made by a production studio that is situated in a particular country.
+Thus, in terms of hierarchical data, this means that any movie is nested in a production studio which in term is nested in a country:</p>
+<p>country –&gt; production-studio –&gt; movie.</p>
+<p>To create data like this we can use similar methods that we used in earlier parts of this tutorial.
+We will structure each simulation into the following 3 steps:</p>
+<ol style="list-style-type: decimal">
+<li>Creating the <em>design matrix</em> - a data-frame containing all the classification variables (countries, studios, movies) and predictors (genre and year of production).</li>
+<li>Simulating the <em>outcome variable</em> and add it to the design matrix.</li>
+<li><strong>Testing</strong> whether the predictors influence the outcome variable.</li>
+</ol>
+<p>I refer to completing the 3 steps above as one single simulation.
+By repeating this process over and over again, we can, once again, perform power simulation.</p>
+<div id="step-1-creating-the-design-matrix" class="section level3">
+<h3>Step 1: Creating the Design Matrix</h3>
+<p>To create the design matrix we have to specify a few assumptions that we make in this particular situation.
+Remember, we are not yet considering the outcome variable (revenue) in this step.
+When we create the design data for a hierarchical model, we need to think about how the nesting levels relate to each other.
+We do this step by step, from the highest level to the lowest level before we start considering predictors.</p>
+<p>How do countries relate to production studios?</p>
+<ul>
+<li>It is reasonable to assume that some countries host more production studios than others.</li>
+</ul>
+<p>How do production companies influence movies?</p>
+<ul>
+<li>Some production companies will have more movies than other production companies.</li>
+</ul>
+<p>Thus, we need to simulate some countries, each of them with varying numbers of production companies that in turn produce varying number of movies.
+To do this, we work our way back from the lowest nesting level to the highest, by first creating a lot of different movies.
+Let’s say that for this simulation we look at 10,000 movies.
+As each movie only gets one observation in the data, i.e. each movie only produces 1 revenue, we will just create a sequence of numbers from 1 to 10,000 to identify our movies.</p>
+<pre class="r"><code>movies &lt;- seq(1:1000)</code></pre>
+<p>Next, we have to create a number of production studios that produce all these movies with some producing more of them and others less.
+Lets say that these 10,000 movies are created by 500 different production companies, so each of them, on average, produces 20 movies.
+However, we expect some of them to create more and others to create fewer movies.
+To do this, we can create a list of production studios and randomly assign them to our 10,000 movies like this:</p>
+<pre class="r"><code>available_companies &lt;- seq(1:50)
+company_productivity &lt;- runif(length(available_companies))
+production_companies &lt;- sample(available_companies, size = length(movies), replace = T, prob = company_productivity)
+d &lt;- data.frame(cbind(movies, production_companies))
+table(d$production_companies)</code></pre>
+<pre><code>## 
+##  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 19 20 21 22 23 24 25 26 27 
+## 14  7 25 23 19 18 21 22 21  9  6 20 24 35 16 18 20 18 29  5 20 14 33 29 43 33 
+## 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 49 50 
+## 35 20 29 22 22 13  5 14 19 26 28 35  1 27 20 15 18 32 15 23 39</code></pre>
+<p>The table above sh</p>
+<pre class="r"><code>available_countries &lt;- seq(1:10)
+country_productivity &lt;- runif(length(available_countries))
+production_countries &lt;- sample(available_countries, size = length(available_companies), replace = T, prob = country_productivity)
+d &lt;- data.frame(cbind(d, production_countries ))
+table(d$production_companies)</code></pre>
+<pre><code>## 
+##  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 19 20 21 22 23 24 25 26 27 
+## 14  7 25 23 19 18 21 22 21  9  6 20 24 35 16 18 20 18 29  5 20 14 33 29 43 33 
+## 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 49 50 
+## 35 20 29 22 22 13  5 14 19 26 28 35  1 27 20 15 18 32 15 23 39</code></pre>
+<pre class="r"><code>d$production_country &lt;- production_countries[d$production_companies]</code></pre>
+<p>production_countries</p>
+<!-- ```{r load_dat} -->
+<!-- library(afex) -->
+<!-- mdat <- read.csv("movies_metadata.csv") -->
+<!-- mdat_new <- droplevels(mdat[which(as.character(mdat$release_date) > "1991-01-01" & mdat$revenue > 1e6),])# select only 21st century movies -->
+<!-- str(mdat_new) -->
+<!-- mdat_new$genres <- as.character(mdat_new$genres) -->
+<!-- mdat_new$genres <- strsplit(mdat_new$genres, split = " ") -->
+<!-- mdat_new$genres <- lapply(mdat_new$genres, function(x) x[4]) -->
+<!-- unique(mdat_new$genres) -->
+<!-- mdat_new$genres <- gsub("[^a-zA-Z]", "", mdat_new$genres) -->
+<!-- mdat_new_selected <- droplevels(mdat_new[which(mdat_new$genres %in% c("Comedy", "Action", "Drama",  "Romance")),]) -->
+<!-- mdat_new_selected$genres <- as.factor(mdat_new_selected$genres) -->
+<!-- contrasts(mdat_new_selected$genres) <- contr.sum(4) -->
+<!-- mdat_new_selected$id <- as.numeric(as.character(mdat_new_selected$id)) -->
+<!-- mdat_new_selected$production_countries <- as.character(mdat_new_selected$production_countries) -->
+<!-- mdat_new_selected$production_countries <- strsplit(mdat_new_selected$production_countries, split = " ") -->
+<!-- mdat_new_selected$production_countries  <- lapply(mdat_new_selected$production_countries, function(x) x[2]) -->
+<!-- unique(mdat_new_selected$production_countries) -->
+<!-- mdat_new_selected$production_countries <- gsub("[^a-zA-Z]", "", mdat_new_selected$production_countries) -->
+<!-- mdat_new_selected$production_companies <- as.character(mdat_new_selected$production_companies) -->
+<!-- mdat_new_selected$production_companies <- strsplit(mdat_new_selected$production_companies, split = " ") -->
+<!-- mdat_new_selected$production_companies  <- lapply(mdat_new_selected$production_companies, function(x) x[2]) -->
+<!-- unique(mdat_new_selected$production_companies) -->
+<!-- mdat_new_selected$production_companies <- gsub("[^a-zA-Z]", "", mdat_new_selected$production_companies) -->
+<!-- m1 <- mixed(revenue ~ genres + (1 | production_countries/id), data = mdat_new_selected, method = "LRT") -->
+<!-- anova(m1) -->
+<!-- summary(m1) -->
+<!-- #TODO: first clear data-set produciton companies and countries -->
+<!-- ``` -->
+<!-- ```{r label, options} -->
+<!-- library("MASS") -->
+<!-- library(afex) -->
+<!-- library(brms) -->
+<!-- gen.data <- function(design_data = d,  -->
+<!--                      n_pp=n_pp,     # number of participants -->
+<!--                      n_stims_pc=n_stims_pc,     # number of items -->
+<!--                      n_cond=n_cond,     # number of items -->
+<!--                      pop_int=10,   # intercept -->
+<!--                      pop_eff1=1,   # effect-size -->
+<!--                      pp_int=20, # SD of ppid-intercept (random participant intercept) -->
+<!--                      pp_pop_eff1_sd=2, # SD of effect per ppid (random slope for participant) -->
+<!--                      stims_int=30, # SD for item-intercept (random item intercept) -->
+<!--                      stims_pop_eff1_sd=3, # SD of effect per item (random slope per item)  -->
+<!--                      rho_pp_pop_eff1=0,   # random correlation between ppid-int and ppid-slope -->
+<!--                      rho_stims_pop_eff1=0,    # random correlation between item-int and item-slope -->
+<!--                      sigma=10,     # unexplained variance / residual variance -->
+<!--                      N=dim(design_data)[1]) {  # number of observations to be sampled) -->
+<!--   pp_vcovmat <- matrix(c(pp_int^2,  -->
+<!--                          pp_int*pp_pop_eff1_sd*rho_pp_pop_eff1, -->
+<!--                          pp_int*pp_pop_eff1_sd*rho_pp_pop_eff1,  -->
+<!--                          pp_pop_eff1_sd^2), -->
+<!--                          ncol=2)  # var-covar matrix for ppid -->
+<!--   ## generate by participant intercepts and slopes: -->
+<!--   pp_RE_sim <- mvrnorm(n_pp,c(0,0),pp_vcovmat) -->
+<!--   stims_vcovmat <- matrix(c(stims_int^2,  -->
+<!--                             stims_int*stims_pop_eff1_sd*rho_stims_pop_eff1, -->
+<!--                             stims_int*stims_pop_eff1_sd*rho_stims_pop_eff1, -->
+<!--                             stims_pop_eff1_sd^2), -->
+<!--                             ncol=2) # var-covar matrix for item -->
+<!--   ## generate by item intercepts and slopes: -->
+<!--   stims_RE_sim <- mvrnorm((n_stims_pc*n_cond),c(0,0),stims_vcovmat) -->
+<!--   dv_sim <- NA -->
+<!--   for (j in seq(1, N)){ # j = number of observations (i.e. go over each row) -->
+<!--     dv_sim[j] <- rnorm(1, pop_int +                                 # common / fixed intercept -->
+<!--                           pp_RE_sim[design_data$ppid[j],1] +         # + random intercept for ppid (first column of simulated data) -->
+<!--                           stims_RE_sim[design_data$stims[j],1] +     # + random intercept for stimulus -->
+<!--                           (pop_eff1 +                                # + fixed effect -->
+<!--                              pp_RE_sim[design_data$ppid[j],2] +      # + random slope participant (second column of simulated data) -->
+<!--                              stims_RE_sim[design_data$stims[j],2]    # + random slope stimulus -->
+<!--                           ) * design_data$cond[j],                   # + multiplicator for effect (centered sd-val) -->
+<!--                         sigma)                                       # unexplained variance over all variables -->
+<!--   } -->
+<!--   return(dv_sim) -->
+<!-- } -->
+<!-- n_cond <- 2 -->
+<!-- n_pp <- 200 -->
+<!-- n_stims_pc <- 50 -->
+<!-- ppid <- rep(1:n_pp, each = n_stims_pc*n_cond) -->
+<!-- #stims <- rep(sample(1:(n_stims_pc*n_cond)), times = n_pp) -->
+<!-- stims <- c(replicate(n_pp, sample(1:(n_stims_pc*n_cond)))) -->
+<!-- cond <- rep(1:n_cond, each=n_stims_pc, times = n_pp) -->
+<!-- dv <- rep(NA, times = n_pp*n_cond*n_stims_pc) -->
+<!-- d <- data.frame(cbind(ppid, stims, cond, dv)) -->
+<!-- d$cond <- ifelse(d$cond == 1, -1, 1) -->
+<!-- with(d, table(cond, stims)) -->
+<!-- with(d, table(cond, ppid)) -->
+<!-- d$dv <- gen.data(design_data = d,  -->
+<!--                    n_pp=n_pp,     # number of participants -->
+<!--                    n_stims_pc=n_stims_pc,     # number of items -->
+<!--                    n_cond=n_cond,     # number of items -->
+<!--                    pop_int=100,   # intercept -->
+<!--                    pop_eff1=0,   # effect-size -->
+<!--                    pp_int=20, # SD of ppid-intercept (random participant intercept) -->
+<!--                    pp_pop_eff1_sd=2, # SD of effect per ppid (random slope for participant) -->
+<!--                    stims_int=40, # SD for item-intercept (random item intercept) -->
+<!--                    stims_pop_eff1_sd=4, # SD of effect per item (random slope per item)  -->
+<!--                    rho_pp_pop_eff1=0.3,   # random correlation between ppid-int and ppid-slope -->
+<!--                    rho_stims_pop_eff1=0.7,    # random correlation between item-int and item-slope -->
+<!--                    sigma=10,     # unexplained variance / residual variance -->
+<!--                    N=dim(d)[1]) -->
+<!-- lmer1 <- lmer(dv ~ cond + (1 + cond | ppid) + (1 + cond  | stims), data = d) -->
+<!-- summary(lmer1) -->
+<!-- ``` -->
+</div>
+</div>
+</div>

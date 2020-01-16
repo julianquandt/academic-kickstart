@@ -1,0 +1,485 @@
+---
+title: Power Analysis by Data Simulation - Part I
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+summary: "This is the first part of my Power Analysis by Simulation tutorial. This part will mainly provide theoretical background on power simulation."
+---
+<!-- this is the fcimpulse logo-->
+<!-- <div id="logo"><img src="../../style/fcimpulse.jpg" width="150px" align="right"></div> -->
+
+```{r setup, include=FALSE}
+require(knitr)
+knitr::opts_chunk$set(echo = T, warning = F, cache = T)
+options(width = 80)
+options(scipen = 10)
+#source("common_packages.R")
+devAskNewPage(ask = FALSE)
+```
+
+
+# Power Analysis by simulation in `R` for really any design
+
+## Why this blog?
+
+In recent years, power-analysis has become a standard tool in the behavioral sciences. 
+With an ongoing replication crisis, high-power research is the a key to improving replicability and to improving the reliability of findings.
+Especially with preregistration slowly becoming standard practice in psychology, power-analysis, the practice of estimating the required sample-size a-priori, is a more important step than ever to plan research projects accordingly.
+
+Not so long ago, power-analysis was a rather complicated endeavor urging people to use algebraic solutions to calculate power of planned studies which can be demanding especially for non-trivial designs (i.e. basically anything that is not a correlation).
+Luckily, for many research designs power-analysis is nowadays readily available in software packages such as [G*Power](http://www.gpower.hhu.de/) and even for relatively complex designs in specialized tools such as the _great_ [PANGEA](https://jakewestfall.shinyapps.io/pangea/) tool for all kinds of generalized ANOVA designs and other tools by [Jake Westfall](http://jakewestfall.org/).
+
+However, while these tools are really great they also have (in my personal opinion) two drawbacks.
+First, they urge the user to familiarize themselves with a new piece of software with new user interfaces, that are not always intuitive.
+Second, and more importantly, these interfaces promote a statistical way of thinking that often leaves the user confused with what the ever-changing parameters (think of these $\delta$ , $d$, $f$, $f^2$ and vague "group-size" and "measurement-point" fields) that need to be filled in mean.
+More annoyingly, these parameters differ for most designs and give an impression that power-analysis is complicated business better left to statisticians or that it might not be worth the effort.
+
+<img src="../../images/the-power-analysis/me-doing-pa.jpg" alt="drawing" width="500"/>
+
+_Figure 1. Me trying to figure out how to use a standard power-analysis software._
+
+
+However, this impression changed dramatically for me once I changed my ways and started doing power analysis by simulation.
+Moreover, learning how to simulate data can of course not only be of use for power analysis but is a useful skill to in every research project.
+When we simulate data, we can see whether what we _think_ about the data-generating process will acturally _result_ in the patterns that we would expect.
+In other words, we can do theoretical experiments (a Bayesian would call this a _prior predictive check_) to see whether if everything goes as we would expect, we would also find the results that we would expect.
+This might sound trivial, but in many cases, especially when our models become more complex, all the different parts in our model tend to interact in some way, and it is easy to get lost and to not know what to expect anymore. 
+By simulating data before we conduct an experiment we do not only gain insights about our power, but we will gain more insights about the underlying theory that we expect as well as the constructs that we try to operationalize.
+
+Thus, even though this tutorial will focus on simulating data for power analysis, you will learn one of the most useful skills (in my opinion) on the side - simulating your own data and thereby conducting theoretical experiments before you even collect data.
+I know that there are already some excellent tutorials on data/power-simulation out there but they are often very brief and assume a rather high level of prior knowledge about `R` and data-simulation in general.
+In this tutorial, I will spend a lot of time on explaining the concepts and code to hopefully enable the reader to understand the underlying principles and flexibly conduct power simulations themselves after reading this.
+
+This tutorial will consist of four different parts.
+Throughout the tutorial I assume readers are familiar with `R` and some of it's base functionality.
+
+* In the first part (the one you are reading) I will give a short overview of how power-analysis by simulation works on a conceptual level and why I prefer it to available power-analysis software, even though there are clear drawbacks that I will also briefly mention.
+Moreover, I will introduce the concept of power again (sorry if you are already familiar with it) as I want to bring us all on the same page and want to give a (hopefully) intuitive example about what we actually do in power calculation and how it relates to the simulation techniques that we will use for the rest of the tutorial.
+* In the second part, I will discuss simulations for the simplest case of paired and two-sample t-tests.
+* In the third part, we will explore different ANOVA and linear regression designs.
+* In the fourth part we will move on to more complex mixed-effects and hierarchical models and even have a peak at Bayesian approaches to power analysis (well technically its not a power analysis but a true detection rate analysis).
+For this fourth part, I assume readers will be familiar with how to fit mixed-effect models in `lmer` and/or `brms`.
+
+
+Just as a little motivator to keep in mind during this sometimes lengthy tutorial:
+At the end of part IV of this tutorial, you will know how to do your own custom power analysis for mixed-effects models as well as a true detection rate analysis for Bayesian mixed-effects models.
+
+## Power Analysis by Simulation (a sustainable alternative)
+
+<img src="../../images/the-power-analysis/new-power.jpg" alt="alternative-power" width="500"/>
+
+_Figure 2. The proof that there are alternative ways to how we normally get our power._
+
+## What is power again? A ~~brief~~ introduction {.tabset .tabset-fade .tabset-pills}
+
+Well, as my intention is to keep this post as short as possible (SPOILER: which definitely did not work), let's directly dive into the topic by having a look at the definition of power:
+
+__If a certain effect of interest exists (e.g. a difference between two groups) power is the chance that we actually find the effect in a given study.__
+
+To provide some intuition about power, lets assume you toss a coin 10 times and you get 10 heads. 
+Should you be surprised about this?
+Intuitively, it makes sense that we should be more surprised the more often we toss the coin and it keeps landing on head. 10 out of 10 heads would for example be less surprising than 10,000 out of 10,000, right?
+This is exactly the question we want to answer when with power analysis[^1]. 
+How often should we toss the coin until we are surprised enough to conclude that the coin is not fair.
+
+To translate the above situation into a Frequentist null-hypothesis significance testing scenario, we hypothesize that the coin _is_ indeed fair (null-hypothesis) and see whether or not the observed number of heads (the observed data) fits with this hypothesis or not. If yes, we will retain the null-hypothesis that the coin is fair, if not, we will conclude that the data are very unlikely to result from tossing a fair coin.
+
+How do we do this? 
+Well, assume we observed 3 heads out of 3 total tosses. 
+Now we can count all ways that this could have happened with a fair coin and compare it to all possible outcomes that our coin toss experiment might have produced. 
+These possibilities are (for a fair coin or any coin that cannot produce only heads or only tails):
+
+Possibility 1: HEAD-HEAD-HEAD
+
+Possibility 2: HEAD-HEAD-TAIL
+
+Possibility 3: HEAD-TAIL-TAIL
+
+Possibility 4: TAIL-TAIL-TAIL
+
+Possibility 5: TAIL-TAIL-HEAD
+
+Possibiltiy 6: TAIL-HEAD-HEAD
+
+Possibility 7: TAIL-HEAD-TAIL
+
+Possibility 8: HEAD-TAIL-HEAD
+
+
+Notice that a possilibity is not only defined by the number of heads and tails but also by the order in which they occur[^2].
+Now we see that only 1 order of events (Possibility 1) can produce 3 out of 3 heads. 
+If our coin is fair, each of these events should be equally likely and we can see that when flipping a fair coin 3 times, in only 1 out of 8 cases we will get 3 heads (Possibility 1). 
+
+Do we find this surprising enough to conclude that the coin that we flipped is unfair? 
+Maybe, maybe not.
+But we do not have to rely on our intuition about what is surprising here, we can actually test how surprised we should be.
+Instead of flipping the coin three times, we flip it 100 times. 
+Imagine we observed 55 heads in 100 flips.
+We could now start writing down all possible outcomes, but that would take some time. 
+This time, there are not 8 but $2^{100}$ = 1267651000000000000000000000000 possible sequences of heads and tails, and we would have to count the ones that produce _at least_ 55 heads to see how often that would happen if our coin is fair.
+
+However, luckily we are not the first who are interested in these kind of problems and we can make use of
+mathematical formulas that other people figured out for us.
+
+Now the story gets a bit technical I'm afraid, and gets us back to stats 101 where we might have learned about _probability mass function._ 
+In short, a probability distribution (or it's function) defines how often we can get each outcome, assuming a certain chance of getting heads or tails. 
+In this case we need the binomial probability mass function.
+If you are interested in seeing this function and see how we can handcode it in `R`, then click below.
+
+<details><summary>CLICK HERE FOR MORE ON BINOMIAL LIKELIHOOD</summary>
+<p>
+
+$$P(x)=\frac{N!}{x!(N-x)!}\pi^x(1-\pi)^{N-x} $$
+
+For people who are not used to mathematical formulas, this might already look intimidating. However, all we need to know right now is that this formula gives us the probability (i.e. the number of ways we get x heads divided by N trials) of getting 550 heads:
+Note that $\pi$ is not the same as we know it from geometry but it is simply the Greek version of the letter p denoting a probability.
+In this case, it is the probability of either event, heads or tails happening on each toss so it is 50% or 0.5.
+
+$$P(550)=\frac{100!}{55!(100-55)!}0.5^{55}(1-0.5)^{100-55}$$
+
+Translating this formula into `R` syntax we get the following:
+
+`factorial(100)/(factorial(55)*factorial(100-55))*0.5^55*(1-0.5)^(100-55)` = `r round(factorial(100)/(factorial(55)*factorial(100-55))*0.5^55*(1-0.5)^(100-55),2)`
+
+In order to answer our question how often we get _at least_ 55 heads, we could repeat the above calculation with all values bigger than 55 up until 100 and add up the probabilities that we get. 
+
+For example we could do this with a for-loop:
+
+```{r p_binom_manual}
+
+# first we write a function that calculates the probability for each number so we can call it in a loop
+pbinom2 <- function(N, q, p){
+  factorial(N)/(factorial(x)*factorial(N-q))*p^q*(1-p)^(N-q)
+}
+
+tosses_55to100 <- c(55:100)  # we define the amount of heads that we want to check for (all bigger than or equal to 55)
+probs <- c() # we will make an empty collection that we will add the results for each number of heads to
+
+for(i in tosses_55to100){
+  probs <- append(probs, pbinom2(100,i,.5))
+}
+print(probs[1:10])
+```
+
+Now we got all the probabilities for each of the amounts of heads that we are interested in.
+By summing them up we get what we need - the probability of getting at least 55 heads in 100 tosses, `sum(probs)` = `r round(sum(probs), 2)` or `r round(sum(probs), 2)*100` percent.
+In other words, when tossing a fair coin, we would get 55 or more heads in 100 tosses.
+
+
+</p>
+</details>
+
+Luckily, this counting is pre-implemented into `R`.
+Running `pbinom(q = 54, size = 100, prob = .5, lower.tail = FALSE)` (I will explain below) we can get R to calculate the proportion of samples that would result in _more than_ `x` times heads in an experiment of `size` 100 (i.e. tossing a coin 100 times). 
+Executing this in `R` we get `r round(pbinom(q = 54, size = 100, prob = .5, lower.tail = FALSE),2)`. 
+
+In short, the `pbinom` function gives us the answer to the question "what is proportion of possible toss-sequences that results in more than `q = 54` (`q` is short for _quantile_ here) heads if we toss a coin `size=100` times if our hypothesis is that the coin is fair with a probability of heads of `prob = .5`.
+Note that, because the function takes _more than_ what we specify as `q`, in the above we use 54 rather than 55. 
+The `lower.tail = FALSE` argument tells `R` that we want the the probability of the upper part of the binomial probability distribution (i.e. the probability of getting 55 or more heads rather than 54 or less).
+In other words, every 6th out of the $2^{100}$ possible sequences has 55 or more heads.
+Again, this is not really surprising and would probably not make us conclude that a coin is definitely unfair.
+
+Let us say that we want to conclude that a coin is unfair if the chance that a coin that _was fair_ produced a particular amount of heads is only 1 percent (i.e. it would only happen in 1 out of 100 experiments in which we toss a coin 100 times).
+What amount of heads would allow us to draw such a conclusion when tossing a coin 100 times?
+To solve this, we can just use the `pbinom` function (i.e. calculating the probability of observing x out of 100 heads) for not only `q = 55` heads but also 56 up to 100 heads, and see from which point onwards only 1 percent of all $2^{100}$ sequences include so many heads.
+
+The code below does exactly this. 
+Conveniently the `pbinom` function cannot only evaluate 1 value at the same time but we can just pass all values that we want to try as a sequence and it will give us the probability of `q` heads for each of them so we can store them as a collection of values.
+We can plot these values to see when we cross the 1 percent line.
+
+```{r caclulate_p1percent}
+n_heads <- 54:99  # all possible amount of heads that we want to try.
+
+p_heads <- pbinom(q = n_heads, size = 100, prob = .5, lower.tail = F)  # get pbinom to show us the probability of so many heads for each of the values if a coin is fair
+
+plot(n_heads, p_heads)  # make a plot of the probabilities
+abline(h = .01)  # draw a line at a probability of .01 
+n_head_01 <-  n_heads[p_heads < .01][1]  # show the first amount of heads where the probabiltiy is smaller than .01
+p_head_01 <-  p_heads[p_heads < .01][1]  # show the first amount of heads where the probabiltiy is smaller than .01
+```
+
+We see that the `r n_head_01` heads out of 100 tosses results in the first probability that is smaller than .01, in this case `r round(p_head_01, 3)`.
+In other words, getting `r n_head_01` or more heads in 100 tosses would only happen rather rarely, in 1 out of `r round(1/p_head_01)` cases.
+Thus actually getting `r n_head_01` heads is rather surprising I would say, and if something like that happened I might be willing to rather assume that a coin is unfair than that a fair coin produced this result.
+
+By the way, finding the amount of heads that would only occur in 1 % of the cases can be performed easier by using the `qbinom` function that gives us the quantile (i.e. number of tosses that resulted in heads) for a specific probability: `qbinom(.01, 100, .5, lower.tail = FALSE)` = `r qbinom(.01, 100, .5, lower.tail = FALSE)`, unsurprisingly giving us the same result.
+
+
+So by now, we covered three key concepts of statistical inference:
+
+- The __null-hypothesis__ is that the coin is fair
+- The __p-value__ is the probability `p_head_01` that we calculated above. 
+- The __alpha level__ (i.e. where people conventionally use .05 in psychological literature[^2]) is the threshold that we picked for concluding it would surprise us enough to say that the coin must be unfair (i.e. that it would only happen in 1% of the cases). In other words, it is the chance that we conclude that a coin is unfair even if it is actually fair. 
+
+But what is the __power__ of the test here (in case you forgot during my very long "brief" introduction, this post was about power)?
+
+To make a claim about the power that we have to detect an effect, we first need to specify this effect more precisely.
+In most software packages, you will use effect-size estimates like $Cohen's\ d$. 
+Here, we will follow a different approach. 
+We will try to think about an effect size that would be meaningful in this coin flip example.
+For instance, if you use the coin to make an important decision, i.e. when the coin-flip is very important (see e.g. Figure 3) you would probably want a rather strict definition of unfairness. 
+For instance you could already conclude that a coin is unfair if it produces heads in more than 55% of the time.
+Furthermore, as it might not be a good idea to get into a fight with Harvey (Figure 3) by incorrectly accusing him of using an unfair coin, you want the chance of this happening (your alpha-level) to be very low at, for example, only 0.1 percent, i.e. making wrong accusations only 1 out of 1000 times [^3].
+Moreover, on the other hand, you also want to be sure that you _would_ detect the unfairness of 55% if it is actually there. 
+Let's say you only want to have a 10 percent chance of not detecting it if it was there. 
+100 minus this chance of potentially not detecting the unfairness is the _power_ that we want our coin-toss study to have, i.e. 90 percent here.
+
+<img src="https://medias.spotern.com/spots/w640/96455-1532336916.jpg" alt="coin-toss-matters" width="500"/>
+
+_Figure 3. An illustrative example of when a coin-toss really matters._
+
+
+To summarize, we do the following statistical test:
+
+* alpha-level = .001
+* (un)fairness-criterion (aka effect size of interest) = 55% heads
+* power = .90
+
+Our job now is to figure out at which number of tosses we can be 90 % sure to detect the unfairness of 55 % with only a 0.1 % chance of getting into a fight with Harvey by wrongly accusing him.
+
+In technical terms, we want to find the number of tosses at which the probability density of getting 55 % or more heads is .001 or smaller with a 90 % chance of detecting unfairness.
+
+To do this we can use the following r-code (explained below):
+
+```{r calc_power_binom}
+power_at_n <- c(0) # initialize vector that stores power for each number of tosses
+n_heads <- c() # save "critical" number of heads for that toss-amount that would result 
+n_toss <- 2 # initialize the toss-counter
+while(power_at_n[n_toss-1] < .90){ # continue as long as power is not 90%
+  n_heads[n_toss] <- qbinom(p = .001, size = n_toss, prob = .50, lower.tail = F) # retrieve critical value
+  power_at_n[n_toss] <- pbinom(q = n_heads[n_toss], size = n_toss, prob = .55, lower.tail = F) # calculate power (1-beta) for each coin-toss
+  n_toss <- n_toss+1 # increase toss-number 
+}
+```
+
+
+The above loop needs some explanation.
+What is happening here?
+We have a loop here that will increase the toss-amount of our simulated experiments by 1 as long as it has not yet reached 90 % power.
+First, we use the `qbinom` function to find the critical value, i.e. the number of heads that would make us believe that a fair coin would be unfair with our 0.1 percent chance of being wrong about this.
+The next line does something slightly new.
+We again use the `pbinom` function to calculate a probability, but which one?
+What we calculate here is the probability of observing the critical value `n_heads[n_toss]` (the number of heads given the current experiment size that a fair coin would produce) in an experiment of size `n_toss` if we would deal with an __unfair__ coin that produces heads in 55 % of the time. 
+This value is our power of our experiment of size `n_toss`.
+We do this because we want to be 90 % certain to detect the unfairness of 55%, so we keep increasing the number of tosses until such an unfairness only happens in 0.1 % of the time.
+Figure 4 demonstrates this
+Lets have a look at two of the values from this calculation to make this more clear.
+For instance, lets look at the values when the loop tried out 100 tosses: 
+
+`n_heads[100]` = `r n_heads[100]`, so we get the same number of heads for 100 tosses with a fair coin as we had above, because we used the same alpha level as in the previous example.
+Next, this 65 was passed on to the `pnorm` function and we can look at the power, `power_at_n[100]` = `r round(power_at_n[100], 2)` at this point we only have a power of .02 or 2%.
+This means that tossing an unfair coin that would give 55% heads 100 times would only make us detect the unfairness in 1 out of 50 cases.
+When we increase the number of tosses until the loop exits, we are at `n_toss-1` = `r n_toss-1` coin tosses and the amount of heads that would make us conclude that a fair coin is unfair with only 1% chance of being wrong is `n_heads-[n_toss-1]` = `r n_heads[n_toss-1]`. Thus in this case, with `r n_toss-1` tosses we need to get `r n_heads[n_toss-1]` heads to conclude that the coin is unfair. 
+What is the chance of getting at least that with our _unfair_ coin?
+Well, that's what the `pnorm` function in the loop above tells us and it is `power_at_n[n_toss-1]` = `r round(power_at_n[n_toss-1], 2)`, our specified 90%.
+We can also plot the power for each number of tosses that we tried in the loop. 
+Figure 4 shows the increase in power with increasing sample-size.
+
+
+```{r power-curve1}
+plot(1:(n_toss-1), power_at_n, xlab = "Number of coin-tosses", ylab = "Power", axes = FALSE)
+abline(h = .90, col = "red")
+axis(side = 1, at = seq(0,(n_toss-1),by=100))
+axis(side = 2, at = seq(0,1,by=0.1))
+```
+
+_Figure 4. Change in power until we reach 90% indicated by the red horizontal line._
+
+
+Thus, when tossing a coin 1908 times, in 90% of the cases we will be able to tell its biased and can confront Harvey with that like shown in Figure 5.
+
+<img src="https://newfastuff.com/wp-content/uploads/2019/02/outrageous_unfair.png" alt="confronting-harvey" width="500"/>
+
+_Figure 5. Confronting Harvey and telling him what we think about his coin._
+
+
+If you are not familiar with probability mass functions and the probability mass functions in `R` this might have been a lot of new information (or maybe it was not) but this is basically what we do in any power analysis: 
+
+We specify a null-hypothesis[^4], an alternative hypothesis an alpha-level and a desired power and calculate the sample-size that would be needed to achieve that power by looking at the probability of getting a certain critical value (i.e. the number of heads) that would be so unlikely that we would belief the null-hypothesis is true (i.e. the coin is fair) and see whether our sample-size (number of coin-tosses) is big enough to result in at least the critical value with the chance that we specified as our desired power.
+
+
+## Simulation: Whats good, whats bad, and how does it work?
+
+
+So far, we have not done any simulation but have merely analytically derived the power from the by making use of the binomial probability mass function.
+Thus, for easy toy-examples like this one we would not need to do a simulation.
+However, as soon as we deal with real examples, it is much more difficult to make use of this approach and if we have several predictors in our model, or if we deal with mixed-effect models or hierarchical models (as we will do in part 3 of this tutorial) the above method is not feasible anymore.
+
+What we can do, however for any model of any complexity and form, is to actually pretend we were repeatedly doing the experiment for each sample size and see how often we would be able to reject the null-hypothesis.
+For instance we could toss a coin 20 times and test whether we would reject the null-hypothesis.
+We could then repeat this process for 20 tosses very often, e.g. 1,000 times and see what the probability is that we would conclude that the null-hypothesis is false.
+This is what we do in power-simulation.
+
+An obvious disadvantage is that instead of calculating the power for each toss-amount (i.e. sample-size) only once, we need to try each toss-amount out 1,000 times. 
+Thus, simulation takes much longer than a regular power-calculation, especially with more complex models and high sample-sizes.
+However, the advantage of the method is that we can just learn it once and adapt it for any situation that we will ever find ourselves in, not having to ever walk through tedious interfaces again, selecting arbitrary analyses and setting ever changing parameters to certain values.
+Another advantage (that will be discussed in detail later) is that we do not need to specify a precise alternative hypothesis and test it for that single value, but that we can actually remain more vague about what our alternative hypothesis (i.e. the effect size that we expect) will be.
+Oftentimes we do not know exactly what effect-size we can expect and we might like to tell the power-analysis about this uncertainty.
+
+
+At last, let us do a power-simulation for the above example.
+Luckily we do not really have to toss a coin as `R` can do that for us by using the `rbinom` function, that will as often as we call it do a coin-tossing experiment for us with a specified sample-size.
+Lets first see how the `rbinom` function works if we would want to toss a coin 20 times.
+
+```{r rbinom-test}
+set.seed(1) # make sure our simulation will give the same results if you try it
+rbinom(1, 20, .50) # let r toss a fair coin 20 times
+```
+
+In the above code, `R` tossed a coin 20 times and it resulted in 9 heads.
+We could repeat this experiment again:
+
+```{r rbinom-test2}
+set.seed(2)
+rbinom(1, 20, .5)
+```
+
+In this case, giving us 8 heads.
+By increasing the first argument to the `rbinom` function, we can tell `R` to repeat this experiment more often.
+Moreover, we can tell it to make use of an unfair coin directly, so we can directly put our alternative hypothesis in the simulation by changing the last number of the `rbinom` function from .50 to .55, to do the same test as above.
+
+```{r rbinom-test3}
+set.seed(1)
+n_heads <- rbinom(1000,20,.55)
+```
+
+Now, `R` repeated the 20 coin-toss experiment 1,000 times with an unfair coin of 55% chance of resulting in heads giving us 1,000 times the amount of heads that it got.
+Let us again now test how big our power was in this case if we made the same assumptions of above, i.e. 90% power with an alpha-level of .001.
+
+```{r coin-flip-sim-test}
+
+p_heads <- pbinom(n_heads, 20, .50, lower.tail = F)
+
+exp_power <- mean(p_heads < .001)
+
+```
+
+The first line in the above code does exactly what we did earlier, just with a little change.
+We take the amounts of heads that we got from an unfair coin, and check in how many cases we would conclude - assuming that the coin would actually be fair, thus using .50 as the probability in `pnorm` - that the observed amounts of heads is too unlikely for us to believe that the coin was fair.
+We save these probabilities to a vector. 
+The second line calculates the observed power of our experiment.
+To understand what it does, let us have a look at the vector p_heads it looks the following (here only the first 10 out of 1,000 values):
+
+```{r head_pheads}
+p_heads[1:10]
+```
+
+As shown above, the `p_heads` vector contains the probability of observing each amount of heads `n_heads` from our 1,000 experiments assuming the experiment was done with a fair coin (which it was not).
+Now we would like to check how many of these probabilities are at least as small as our alpha-level, i.e. surprising enough to conclude the coin was not fair.
+We do this by checking for each value whether it was .001 or smaller (`p_heads < .001`). 
+This will result in another vector of 0 when the condition is not true and 1 when the condition is true.
+Taking the mean of this vector will give us the probability of rejecting the null-hypothesis while we actually know it is incorrect (as we put the bias in the coin ourselves). 
+Again, this will give us the power.
+In the present case with 20 coin-tosses the power is `exp_power` = `r exp_power` or 0.4%.
+This is obviously very low and not surprising given that we already know that we need a lot more coin-tosses than 20 to get the desired power of 90%.
+To get to our desired power in this example, we need to change the code above so it will try different sample-sizes again.
+
+```{r estimate_n_binom}
+set.seed(1)
+exp_power_at_n <- c(0) # create a vector where we can store the power for each sample-size
+n_toss <- 2 # start at 2 tosses
+while(exp_power_at_n[n_toss-1] < .90){ # continue increasing the sample-size until power = 90%
+  n_heads <- rbinom(1000, n_toss, .55) # run 1000 experiments for any given number of tosses and store number of heads
+  p_heads <- pbinom(n_heads, n_toss, .50, lower.tail = F) # calculate the probability of getting at least that many heads if the coin would be fair 
+  exp_power_at_n[n_toss] <- mean(p_heads < .001) # calculate power by checking what proportion of the probabilities is smaller than or equal to our alpha-level
+  n_toss = n_toss+1
+}
+```
+
+The above code is similar to what we have done earlier when we tried only 1 sample-size.
+This time, we iterate over different sample-sizes in a loop and store the power for each in the vector `exp_power_at_n`.
+As in the earlier calculation, we can now use this to see how many tosses we would need by having a look at where the loop stopped, i.e. when it reached 90% power, which is at `n_toss-1` = `r n_toss-1` tosses at which the power was `exp_power_at_n[n_toss-1]` = `r exp_power_at_n[n_toss-1]`.
+We can also plot all these values again as done in Figure 6. 
+
+```{r figure6}
+
+plot(2:n_toss-1, exp_power_at_n, xlab = "Number of coin-tosses", ylab = "Power", ylim = c(0,1), axes = FALSE)
+abline(h = .90, col = "red")
+axis(side = 1, at = seq(0,(n_toss-1),by=100))
+axis(side = 2, at = seq(0,1,by=0.1))
+```
+
+_Figure 6. Observed power in the simulation._
+
+
+The shape of the line looks very similar to the earlier calculation, however the line appears to be thicker. 
+Moreover, it might be surprising that we did not get the same amount of tosses that we got from the calculation. 
+Actually they differ quite a lot (1908 vs. 1829).
+This is due to the fact that even when running 1,000 experiments for each sample-size there is still imprecision in the simulation.
+Each coin-flip is random and even if we repeat a experiment 1,000 times this randomness is still in there.
+You can see the calculation that we did earlier, on the other hand, as a simulation with an _infinite_ amount of repeated experiments per sample-size. 
+This difference in precision is why we cat a different number in the simulation and why the line is thicker than in Figure 4.
+
+Thus, if we want to approach the results of the calculation more closely in our simulation we can increase the number of experiments that `R` will run per sample-size (i.e. the number of simulations).
+For example, we could repeat the simulation with 100,000 experiments per sample-size.
+You have to be patient here, this already takes a few minutes maybe.
+
+```{r sim-power-100000}
+set.seed(1)
+exp_power_at_n <- c(0)
+n_toss <- 2
+while(exp_power_at_n[n_toss-1] < .90){
+  n_heads <- rbinom(100000, n_toss, .55) # here we increased the number of samples
+  p_heads <- pbinom(n_heads, n_toss, .50, lower.tail = F)
+  exp_power_at_n[n_toss] <- mean(p_heads < .001)
+  n_toss = n_toss+1
+}
+```
+
+If you run this code, you will see that it took substantially longer than the previous simulation with only 1,000 repetitions.
+If we now look at the outcome again we find that the number of tosses `n_toss-1` = `r n_toss-1` is already slightly closer to the calculated value but still not exactly the same.
+In my personal opinion, this imprecision is both advantage of simulation as well as disadvantage.
+It is a disadvantage in that it is less precise than the calculation above in theory.
+However, it is an advantage as it adds some noise to the power-estimation process that is actually also present in real life.
+This is, even if there is an effect in the population, each new sample will always be different which is also the case in the simulation.
+If we look at Figure 7, we also see that now the power-increase follows a more straight line again that is very close to the one from the exact calculation and not as thick anymore as in Figure 6.
+
+```{r figure7}
+
+plot(2:n_toss-1, exp_power_at_n, xlab = "Number of coin-tosses", ylab = "Power", ylim = c(0,1), axes = FALSE)
+abline(h = .90, col = "red")
+axis(side = 1, at = seq(0,(n_toss-1),by=100))
+axis(side = 2, at = seq(0,1,by=0.1))
+```
+
+_Figure 7. Power curve for a more precise simulation._
+
+
+# Summary
+
+In this part of the tutorial I tried to bring us all on the same page about power.
+For some people, most of these things might not have been new, but I hope you forgive my rather lengthy introduction on power-analysis before actually doing the simulation, as I thought it would be a good foundation before we move on to more complex and realistic situations.
+In part II of this tutorial we will move on to these more realistic situations that we might actually be interested in psychology by looking at how we do simulations for t-tests, ANOVA and regression designs.
+
+
+# Footnotes
+
+[^1]:
+The answer to the question - _Should we be surprised_ - is basically what we get when we do a statistical test and inspect the p-value.
+Ok, this is not exactly true but p-values _can_ actually be expressed in terms of how surprised we should be about an observation, given a certain hypothesis (e.g. when we assume no difference between groups as the null-hypothesis). 
+To read an awesome explanation about this, look at [this](https://lesslikely.com/statistics/s-values/) really cool blog-post about _s-values_ by [Zad Chow](https://twitter.com/dailyzad).
+
+[^2]:
+Why is the order important here? 
+Because orders do identify unique outcomes. 
+If we do not consider entire sequences, we might be inclined to think that there are only four possibilities: 3xHEADS, 2xHEADS, 1xHEADS and 0xHEADS, and that each of these events is equally likely. 
+However, how likely eah of these events is depends on how many different sequences can produce it.
+
+[^2]:
+Notice however, that this alpha-level of .05 implies that we are surprised enough if something only happens in 1 out of 20 cases.
+There have, however, been repeated calls to [change the standard alpha-level](https://www.nature.com/articles/s41562%20017%200189%20z), to [justify it based on the specific situation you are in](https://www.nature.com/articles/s41562-018-0311-x) or to [abandon it all together](https://arxiv.org/abs/1709.07588) alongside other ideas of using alternatives like the [Bayes-Factor](https://link.springer.com/article/10.3758/s13423-011-0088-7).
+For the most part, in this tutorial I will try to justify the alpha that I choose and to stay away from the "magical" .05 as I agree with the justification approach in that we should at least _try_ and think harder about the alpha-level and it's meaning.
+
+[^3]:
+Hey look, we just justified our alpha-level!
+
+[^4]:
+It might be confusing that i say "specify" a null-hypothesis here. 
+Is the null-hypothesis not by definition that there is no difference, i.e. that the coin is fair at 50%.
+Well, yes and no. 
+Of course assuming coin-fairness is the most logical thing to do here but in real life, no matter what research question you are investigating, you will close to _always_ find a difference between groups. 
+If you keep increasing the sample size, at some point the effect will always be significant, no matter how small the deviation is. 
+This is, we could even find the unfairness of the coin if it is only 51%. 
+But is this 51% really big enough to care about? 
+Maybe, maybe not but it is often sensible to use a technique called _Equivalance testing_ in which the null-hypothesis as a certain range of small deviations from the actual point of no-difference in which we say that if our detected effect, e.g. the unfairness of 51% falls into that interval, we would still not reject the null-hypothesis as the deviation is too small to be meaningful in real life.
+Equivalence testing is not new but surprisingly unknown and/or uncommon in the psychological literature. 
+If you are interested in Equivalence Testing, you should check out the great [paper(s)](https://journals.sagepub.com/doi/10.1177/2515245918770963) and [blog-post(s)](http://daniellakens.blogspot.com/2018/08/equivalence-testing-and-second.html) about it by [Daniel Lakens](http://daniellakens.blogspot.com/) and colleagues.
+

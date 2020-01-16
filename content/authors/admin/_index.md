@@ -1,6 +1,6 @@
 ---
 # Display name
-name: Nelson Bighetti
+name: Julian Quandt
 
 # Username (this should match the folder name)
 authors:
@@ -10,32 +10,30 @@ authors:
 superuser: true
 
 # Role/position
-role: Professor of Artificial Intelligence
+role: PhD student 
 
 # Organizations/Affiliations
 organizations:
-- name: Stanford University
+- name: Behavioural Science Institute, Radboud University
   url: ""
 
 # Short bio (displayed in user profile at end of posts)
-bio: My research interests include distributed robotics, mobile computing and programmable matter.
+bio: just a regular person.
 
 interests:
-- Artificial Intelligence
-- Computational Linguistics
-- Information Retrieval
+- Social and Cognitive Psychology 
+- Statistics 
+- Experimental Design
+- Open Science
 
 education:
   courses:
-  - course: PhD in Artificial Intelligence
-    institution: Stanford University
-    year: 2012
-  - course: MEng in Artificial Intelligence
-    institution: Massachusetts Institute of Technology
-    year: 2009
-  - course: BSc in Artificial Intelligence
-    institution: Massachusetts Institute of Technology
-    year: 2008
+  - course: MSc in Behavioural Science
+    institution: Radboud University
+    year: 2017
+  - course: BSc in Psycholgy
+    institution: Radboud University
+    year: 2014
 
 # Social/Academic Networking
 # For available icons, see: https://sourcethemes.com/academic/docs/widgets/#icons
@@ -44,16 +42,16 @@ education:
 social:
 - icon: envelope
   icon_pack: fas
-  link: '#contact'  # For a direct email link, use "mailto:test@example.org".
+  link: '#contact'  # For a direct email link, use "mailto:julian_quandt@live.de".
 - icon: twitter
   icon_pack: fab
-  link: https://twitter.com/GeorgeCushen
+  link: https://twitter.com/julianquandt
 - icon: google-scholar
   icon_pack: ai
-  link: https://scholar.google.co.uk/citations?user=sIwtMXoAAAAJ
+  link: https://scholar.google.nl/citations?user=lTi0-m4AAAAJ&hl
 - icon: github
   icon_pack: fab
-  link: https://github.com/gcushen
+  link: https://github.com/julianquandt
 # Link to a PDF of your resume/CV from the About widget.
 # To enable, copy your resume/CV to `static/files/cv.pdf` and uncomment the lines below.  
 # - icon: cv
@@ -70,6 +68,21 @@ user_groups:
 - Visitors
 ---
 
-Nelson Bighetti is a professor of artificial intelligence at the Stanford AI Lab. His research interests include distributed robotics, mobile computing and programmable matter. He leads the Robotic Neurobiology group, which develops self-reconfiguring robots, systems of self-organizing robots, and mobile sensor networks.
+My name is Julian Quandt. I'm a PhD student at the [Behavioural Science Institute](https://www.ru.nl/bsi/) at [Radboud University](https://www.ru.nl/english/) in Nijmegen (the one in the Netherlands, not the USA one). My supervisors are [Harm Veling](.), [Rob Holland](.), and [Bernd Figner](.).
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed neque elit, tristique placerat feugiat ac, facilisis vitae arcu. Proin eget egestas augue. Praesent ut sem nec arcu pellentesque aliquet. Duis dapibus diam vel metus tempus vulputate. 
+In my PhD project, I aim to increase our understanding of food-choices (and value-based decisions in gerneral).
+Specifically, I want to investigate how values of real-world objects (such as your favorite chocolate-cookies) are represented and retrieved on a cognive level.
+The questions that keep me awake at night are:
+
+- How do people retrieve value-information when they make a decision?
+- Why are some preferences stable, while other preferences tend to fluctuate?
+- Why are people confident about some choices while they are uncertain of others?
+
+My idea is that values should be understood as distributions, that represent previous experiences with an object. When making a choice, people sample from these distributions.
+While this idea is not new (see eg. [here](.),[here](.), or [here](.)) I think that these distributions might be deeply related to the questions above.
+This is, when distributions are wider (e.g. when experiences are very ambiguous regarding the quality of a food-snack), people will express this as uncertainty.
+Thus, to improve my nightrest, I want to explore these questions by developing empirical measures of these distributions and relate them to behavioural measures of uncertainty.
+
+If this was not too boring for you thus far and you are still reading, I am also an enthousiast of statistics, statistical modelling, programming (R and python in particular) open science, open access, open source and open bars.
+
+Next to this, I really enjoy travelling, photography and whiskey-tastings.

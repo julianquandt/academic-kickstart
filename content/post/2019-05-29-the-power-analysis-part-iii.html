@@ -1,0 +1,36 @@
+---
+title: Power Analysis by Data Simulation - Part III
+date: "16 January, 2020"
+---
+
+
+
+<!-- this is the fcimpulse logo-->
+<!-- <div id="logo"><img src="../../style/fcimpulse.jpg" width="150px" align="right"></div> -->
+<style type="text/css">
+button.btn.collapsed:before
+{
+    content:'+' ;
+    display:block;
+    width:15px;
+}
+button.btn:before
+{
+    content:'-' ;
+    display:block;
+    width:15px;
+}
+</style>
+<div id="the-power-analysis-by-simulation-in-r-for-really-any-design---part-iii" class="section level1">
+<h1>The Power Analysis by simulation in <code>R</code> for really any design - Part III</h1>
+<p>This is Part III of my tutorial on how to do power-analysis by simulation.
+In Part I, we saw how to do a simulation for a simple toy-example with a coin-toss.
+In part II we learned how to simulate univariate and multivariate normal-distributions, specify our assmuptions about the expected effect and test our simulated data with different t-tests.
+In this part, we will focus on how we can write a flexible test for any model by making use of the fact that many statistical standard methods (e.g. t-test, ANOVA) can be rewritten as a linear model.
+This way, no matter what situation we find ourselves in, we will always be able to use the same power-simulation with only slight changes.</p>
+<p>In part IV we will learn how to apply this technique to complicated designs such as linear mixed-effects models and generalized mixed-effects models.</p>
+<div id="revisiting-the-t-test-just-another-linear-model" class="section level2">
+<h2>Revisiting the t-test: just another linear model</h2>
+<p>Before I even start with this topic, I want to point out that I took much of the information I present here from Jonas Kristoffer Lindel</p>
+</div>
+</div>

@@ -31,7 +31,7 @@ education:
   - course: MSc in Behavioural Science
     institution: Radboud University
     year: 2017
-  - course: BSc in Psycholgy
+  - course: BSc in Psychology
     institution: Radboud University
     year: 2014
 
@@ -42,7 +42,7 @@ education:
 social:
 - icon: envelope
   icon_pack: fas
-  link: '#contact'  # For a direct email link, use "mailto:julian_quandt@live.de".
+  link: "mailto:julian_quandt@live.de"  # For a direct email link, use "mailto:julian_quandt@live.de".
 - icon: twitter
   icon_pack: fab
   link: https://twitter.com/julianquandt
